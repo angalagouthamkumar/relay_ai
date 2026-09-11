@@ -168,7 +168,7 @@ function ChatWindow({ onOpenSidebar = () => {} }) {
     };
 
     try {
-      const response = await fetch("http://localhost:3000/chat", options);
+      const response = await fetch("https://relay-ai-v9uy.onrender.com/chat", options);
       const data = await response.json();
 
       if (!response.ok) {

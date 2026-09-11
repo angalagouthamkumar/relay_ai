@@ -31,7 +31,7 @@ function Sidebar({ isOpen = false, onClose = () => {} }) {
   const getAllThreads = useCallback(async () => {
     try {
       const response = await fetch(
-        "http://localhost:3000/chat/threads",
+        "https://relay-ai-v9uy.onrender.com/chat/threads",
         {
           method: "GET",
           credentials: "include"
@@ -101,7 +101,7 @@ function Sidebar({ isOpen = false, onClose = () => {} }) {
 
   const logoutUser = async () => {
     try {
-      const response = await fetch("http://localhost:3000/auth/logout", {
+      const response = await fetch("https://relay-ai-v9uy.onrender.com/auth/logout", {
         method: "POST",
         credentials: "include"
       });
@@ -129,7 +129,7 @@ function Sidebar({ isOpen = false, onClose = () => {} }) {
   const changeThread = async (id, threadId) => {
     setThreadId(threadId);
     try {
-      const response = await fetch(`http://localhost:3000/chat/threads/${id}`, { 
+      const response = await fetch(`https://relay-ai-v9uy.onrender.com/chat/threads/${id}`, {
         method: "GET",
         credentials: "include"
       });
@@ -156,7 +156,7 @@ function Sidebar({ isOpen = false, onClose = () => {} }) {
   const pinThread = async (id) => {
     try {
       const response = await fetch(
-        `http://localhost:3000/chat/threads/${id}/pin`,
+        `https://relay-ai-v9uy.onrender.com/chat/threads/${id}/pin`,
         {
           method: "PATCH",
           credentials: "include"
@@ -190,7 +190,7 @@ function Sidebar({ isOpen = false, onClose = () => {} }) {
 
   const deleteThread = async (id) => {
     try {
-      const response = await fetch(`http://localhost:3000/chat/threads/${id}`, {
+      const response = await fetch(`https://relay-ai-v9uy.onrender.com/chat/threads/${id}`, {
         method: "DELETE",
         credentials: "include"
       });

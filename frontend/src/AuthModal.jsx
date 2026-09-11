@@ -120,7 +120,7 @@ function AuthModal() {
       setFormError("");
 
       const response = await fetch(
-        `http://localhost:3000/auth/${endpoint}`,
+        `https://relay-ai-v9uy.onrender.com/auth/${endpoint}`,
         {
           method: "POST",
           headers: {

@@ -46,7 +46,7 @@ function App() {
     try {
       setAuthLoading(true);
 
-      const response = await fetch("http://localhost:3000/auth/me", {
+      const response = await fetch("https://relay-ai-v9uy.onrender.com/auth/me", {
         method: "GET",
         credentials: "include"
       });
