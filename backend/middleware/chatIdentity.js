@@ -15,7 +15,8 @@ const chatIdentity = (req, res, next) => {
     return next();
   }
 
-  if (!req.session.guestId) {
+  const isNewGuest = !req.session.guestId;
+  if (isNewGuest) {
     req.session.guestId = randomUUID();
   }
 
@@ -29,7 +30,19 @@ const chatIdentity = (req, res, next) => {
     Date.now() + GUEST_SESSION_DURATION
   );
 
-  next();
+  if (isNewGuest) {
+    req.session.save((err) => {
+      if (err) {
+        console.error("Error saving guest session:", err);
+        return res.status(500).json({
+          error: "Unable to initialize session"
+        });
+      }
+      next();
+    });
+  } else {
+    next();
+  }
 };
 
 export {

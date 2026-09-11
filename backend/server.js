@@ -8,6 +8,10 @@ import chatRoutes from "./routes/chat.js";
 import authRoutes from "./routes/auth.js";
 
 const app = express();
+
+// Production-safe proxy trust for Render / reverse proxies (single hop)
+app.set("trust proxy", 1);
+
 app.use(
   cors({
     origin: process.env.FRONTEND_URL || "http://localhost:5173",
@@ -25,19 +29,20 @@ app.use("/auth", authRoutes);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  connectToDatabase();
-});
-
 const connectToDatabase = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URL);
     console.log("Connected to MongoDB");
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
+    process.exit(1);
   }
 };
+
+connectToDatabase();
 
 // app.post("/test", async (req, res) => {
 //   const { message } = req.body;

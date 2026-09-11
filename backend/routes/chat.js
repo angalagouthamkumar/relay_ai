@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import models from "../models/thread.js";
 const { Thread } = models;
 import getOpenAIResponse from "../utils/openai.js";
@@ -6,20 +7,6 @@ import chatIdentity from "../middleware/chatIdentity.js";
 
 const router = express.Router();
 router.use(chatIdentity);
-
-// router.post("/test", async (req, res) => {
-//     try {
-//         const newThread = new Thread({
-//             threadId: "567",
-//             title: "dsmlf"
-//         });
-//         const response = await newThread.save();
-//         res.status(201).send(response);
-//     } catch (error) {
-//         console.error("Error occurred:", error);
-//         res.status(500).send({ error: "Internal Server Error" });
-//     }
-// });
 
 router.get("/threads", async (req, res) => {
   try {
@@ -41,6 +28,12 @@ router.get("/threads", async (req, res) => {
 router.get("/threads/:threadId", async (req, res) => {
   try {
     const { threadId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(threadId)) {
+      return res.status(400).json({
+        error: "Invalid conversation ID"
+      });
+    }
 
     const thread = await Thread.findOne({
       _id: threadId,
@@ -66,6 +59,12 @@ router.get("/threads/:threadId", async (req, res) => {
 router.patch("/threads/:threadId/pin", async (req, res) => {
   try {
     const { threadId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(threadId)) {
+      return res.status(400).json({
+        error: "Invalid conversation ID"
+      });
+    }
 
     const thread = await Thread.findOne({
       _id: threadId,
@@ -101,6 +100,12 @@ router.patch("/threads/:threadId/pin", async (req, res) => {
 router.delete("/threads/:threadId", async (req, res) => {
   try {
     const { threadId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(threadId)) {
+      return res.status(400).json({
+        error: "Invalid conversation ID"
+      });
+    }
 
     const thread = await Thread.findOneAndDelete({
       _id: threadId,
@@ -147,6 +152,14 @@ router.post("/", async (req, res) => {
     });
 
     if (!thread) {
+      // Prevent duplicate-key collision if conversation UUID exists under a different session identity
+      const existingThreadOtherOwner = await Thread.findOne({ threadId: cleanThreadId });
+      if (existingThreadOtherOwner) {
+        return res.status(404).json({
+          error: "Conversation not found"
+        });
+      }
+
       thread = new Thread({
         threadId: cleanThreadId,
         ...req.chatOwner,
@@ -168,7 +181,8 @@ router.post("/", async (req, res) => {
       thread.expiresAt = req.chatExpiresAt;
     }
 
-    const aiResponse = await getOpenAIResponse(cleanMessage);
+    // Pass conversation messages to AI provider so follow-up messages have context
+    const aiResponse = await getOpenAIResponse(thread.messages);
 
     thread.messages.push({
       role: "assistant",
@@ -181,22 +195,22 @@ router.post("/", async (req, res) => {
     await thread.save();
 
     return res.status(200).json({
-    reply: aiResponse,
-    temporary: !req.isAuthenticated(),
-    thread: {
+      reply: aiResponse,
+      temporary: !req.isAuthenticated(),
+      thread: {
         _id: thread._id,
         threadId: thread.threadId,
         title: thread.title,
         pinned: thread.pinned,
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt
-    }
+      }
     });
   } catch (error) {
     console.error("Chat error:", error);
 
     return res.status(500).json({
-      error: error.message || "Unable to process message"
+      error: "Unable to process message"
     });
   }
 });

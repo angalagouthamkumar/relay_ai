@@ -22,6 +22,15 @@ const createSessionMiddleware = () => {
     console.error("Session store error:", error);
   });
 
+  /**
+   * Deployment Topology Notice:
+   * Third-party cookie policies in modern browsers can restrict cross-site cookies
+   * when frontend and backend are on completely separate domains (e.g., .netlify.app and .onrender.com).
+   * The preferred production deployment topology is using the same apex domain:
+   * Frontend: relay.goouthamkumar.in
+   * Backend:  api.relay.goouthamkumar.in
+   * This makes cookies first-party / same-site.
+   */
   return session({
     name: "relay.sid",
     secret: process.env.SESSION_SECRET,
@@ -32,7 +41,8 @@ const createSessionMiddleware = () => {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/"
     }
   });
 };

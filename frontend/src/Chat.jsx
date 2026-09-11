@@ -4,14 +4,20 @@ import MyContext from "./Mycontext";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 
-
 function Chat() {
-  const { newChat, prevChats, reply } = useContext(MyContext);
+  const { prevChats, reply, setReply, threadId } = useContext(MyContext);
   const [latestReply, setLatestReply] = useState(null);
 
+  // Reset typewriter state on thread switch
+  useEffect(() => {
+    setLatestReply(null);
+  }, [threadId]);
 
   useEffect(() => {
-    if (!reply) return;
+    if (!reply) {
+      setLatestReply(null);
+      return;
+    }
 
     const content = reply.split("");
     let idx = 0;
@@ -20,56 +26,55 @@ function Chat() {
 
     const interval = setInterval(() => {
       idx += 6;
-      setLatestReply(content.slice(0, idx).join(""));
-
       if (idx >= content.length) {
         clearInterval(interval);
+        setLatestReply(null);
+        if (setReply) setReply(null);
+      } else {
+        setLatestReply(content.slice(0, idx).join(""));
       }
     }, 20);
 
-    return () => clearInterval(interval);
-  }, [reply]);
-
-  const lastChat = prevChats?.[prevChats.length - 1];
-
-  const visibleChats =
-    lastChat?.role === "assistant"
-      ? prevChats.slice(0, -1)
-      : prevChats;
+    return () => {
+      clearInterval(interval);
+      setLatestReply(null);
+    };
+  }, [reply, setReply, threadId]);
 
   return (
     <div className="chats">
-      {visibleChats?.map((chat, idx) => (
-        <div
-          className={chat.role === "user" ? "userDiv" : "gptDiv"}
-          key={idx}
-        >
-          <p className={chat.role === "user" ? "userMessage" : "gptMessage"}>
-            {chat.content}
-          </p>
-        </div>
-      ))}
+      {prevChats?.map((chat, idx) => {
+        const isLast = idx === prevChats.length - 1;
+        const isCurrentlyTyping =
+          isLast && chat.role === "assistant" && Boolean(reply);
+        const messageContent = isCurrentlyTyping
+          ? (latestReply ?? "")
+          : chat.content;
+        const stableKey =
+          chat._id ||
+          chat.id ||
+          (chat.timestamp
+            ? `${chat.role}-${chat.timestamp}-${idx}`
+            : `${chat.role}-${idx}-${chat.content?.slice(0, 16)}`);
 
-  
+        if (chat.role === "user") {
+          return (
+            <div className="userDiv" key={stableKey}>
+              <p className="userMessage">{messageContent}</p>
+            </div>
+          );
+        }
 
-      {lastChat?.role === "assistant" && latestReply !== null && (
-        <div className="gptDiv">
-          <div className="gptMessage">
-            <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
-              {latestReply}
-            </ReactMarkdown>
+        return (
+          <div className="gptDiv" key={stableKey}>
+            <div className="gptMessage">
+              <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+                {messageContent}
+              </ReactMarkdown>
+            </div>
           </div>
-        </div>
-      )}
-      {lastChat?.role === "assistant" && latestReply === null && (
-        <div className="gptDiv">
-          <div className="gptMessage">
-            <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
-              {prevChats[prevChats.length - 1]?.content}
-            </ReactMarkdown>
-          </div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }

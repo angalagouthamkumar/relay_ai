@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import "./AuthModal.css";
-import MyContext from "./Mycontext";
+import MyContext, { API_BASE_URL } from "./Mycontext";
 
 function AuthModal() {
   const {
@@ -120,7 +120,7 @@ function AuthModal() {
       setFormError("");
 
       const response = await fetch(
-        `https://relay-ai-v9uy.onrender.com/auth/${endpoint}`,
+        `${API_BASE_URL}/auth/${endpoint}`,
         {
           method: "POST",
           headers: {

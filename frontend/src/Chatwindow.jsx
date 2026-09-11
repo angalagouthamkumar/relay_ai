@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -7,13 +6,13 @@ import {
   useState
 } from "react";
 import "./Chatwindow.css";
-import MyContext from "./Mycontext";
+import MyContext, { API_BASE_URL } from "./Mycontext";
 import { SyncLoader } from "react-spinners";
 import Chat from "./Chat";
 import SplitText from "./SplitText";
 
 function ChatWindow({ onOpenSidebar = () => {} }) {
-    const {
+  const {
     prompt,
     setPrompt,
     setReply,
@@ -26,13 +25,17 @@ function ChatWindow({ onOpenSidebar = () => {} }) {
     currentUser
   } = useContext(MyContext);
   const [isLoading, setIsLoading] = useState(false);
+  const [chatError, setChatError] = useState(null);
+
   const messagesContainerRef = useRef(null);
   const chatEndRef = useRef(null);
   const shouldAutoScrollRef = useRef(true);
-  const isProgrammaticScrollRef = useRef(false);
-  const scrollTimeoutRef = useRef(null);
+  const isUserTouchingRef = useRef(false);
+  const touchStartYRef = useRef(0);
   const previousThreadIdRef = useRef(threadId);
-  const threadChangePendingRef = useRef(false);
+  const isThreadSwitchPendingRef = useRef(false);
+  const activeThreadIdRef = useRef(threadId);
+
   const firstName = currentUser?.username?.trim().split(/\s+/)[0] || "there";
 
   const showWelcome =
@@ -40,69 +43,44 @@ function ChatWindow({ onOpenSidebar = () => {} }) {
     Array.isArray(prevChats) &&
     prevChats.length === 0;
 
-  const scrollToBottom = useCallback((behavior = "smooth") => {
-    if (!chatEndRef.current) return;
-
-    isProgrammaticScrollRef.current = true;
-
-    chatEndRef.current.scrollIntoView({
-      behavior,
-      block: "end"
-    });
-
-    window.clearTimeout(scrollTimeoutRef.current);
-
-    scrollTimeoutRef.current = window.setTimeout(() => {
-      isProgrammaticScrollRef.current = false;
-    }, behavior === "smooth" ? 600 : 50);
-  }, []);
-
-  useLayoutEffect(() => {
+  // Clear chat error, update active thread ref, and flag thread switch on threadId change
+  useEffect(() => {
+    activeThreadIdRef.current = threadId;
+    setChatError(null);
+    setIsLoading(false);
     if (previousThreadIdRef.current !== threadId) {
       previousThreadIdRef.current = threadId;
-      threadChangePendingRef.current = true;
-      shouldAutoScrollRef.current = true;
+      isThreadSwitchPendingRef.current = true;
+      shouldAutoScrollRef.current = false;
     }
   }, [threadId]);
 
+  // When prevChats change: instant jump to bottom if thread switch, without visible smooth scrolling
   useLayoutEffect(() => {
-    if (!shouldAutoScrollRef.current) return;
-
-    const behavior = threadChangePendingRef.current
-      ? "auto"
-      : "smooth";
-
-    threadChangePendingRef.current = false;
-
-    const frameId = window.requestAnimationFrame(() => {
-      scrollToBottom(behavior);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [prevChats, isLoading, scrollToBottom]);
-
-  useEffect(() => {
     const container = messagesContainerRef.current;
-
     if (!container) return;
 
-    let frameId;
+    if (isThreadSwitchPendingRef.current) {
+      isThreadSwitchPendingRef.current = false;
+      shouldAutoScrollRef.current = true;
+      container.scrollTop = container.scrollHeight;
+      return;
+    }
+
+    if (shouldAutoScrollRef.current && !isUserTouchingRef.current) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [prevChats, isLoading]);
+
+  // Follow growing assistant typewriter content without competing animations or viewport movement
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
 
     const observer = new MutationObserver(() => {
-      if (
-        !shouldAutoScrollRef.current ||
-        isProgrammaticScrollRef.current
-      ) {
-        return;
+      if (shouldAutoScrollRef.current && !isUserTouchingRef.current) {
+        container.scrollTop = container.scrollHeight;
       }
-
-      window.cancelAnimationFrame(frameId);
-
-      frameId = window.requestAnimationFrame(() => {
-        scrollToBottom("auto");
-      });
     });
 
     observer.observe(container, {
@@ -113,47 +91,89 @@ function ChatWindow({ onOpenSidebar = () => {} }) {
 
     return () => {
       observer.disconnect();
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [scrollToBottom]);
-
-  useEffect(() => {
-    return () => {
-      window.clearTimeout(scrollTimeoutRef.current);
     };
   }, []);
 
-  const handleMessagesScroll = () => {
-    const container = messagesContainerRef.current;
-
-    if (!container || isProgrammaticScrollRef.current) return;
-
-    const distanceFromBottom =
-      container.scrollHeight -
-      container.scrollTop -
-      container.clientHeight;
-
-    shouldAutoScrollRef.current = distanceFromBottom < 120;
+  // Handle wheel scrolling: upward scroll immediately pauses auto-follow
+  const handleWheel = (event) => {
+    if (event.deltaY < 0) {
+      shouldAutoScrollRef.current = false;
+    } else if (event.deltaY > 0) {
+      const container = messagesContainerRef.current;
+      if (container) {
+        const distanceFromBottom =
+          container.scrollHeight - container.scrollTop - container.clientHeight;
+        if (distanceFromBottom < 40) {
+          shouldAutoScrollRef.current = true;
+        }
+      }
+    }
   };
 
-  const handleUserScrollIntent = () => {
-    isProgrammaticScrollRef.current = false;
-    window.clearTimeout(scrollTimeoutRef.current);
+  // Touch handlers to prevent shaking when dragging during typing
+  const handleTouchStart = (event) => {
+    isUserTouchingRef.current = true;
+    touchStartYRef.current = event.touches[0]?.clientY || 0;
+  };
 
-    window.requestAnimationFrame(handleMessagesScroll);
+  const handleTouchMove = (event) => {
+    const currentY = event.touches[0]?.clientY || 0;
+    if (currentY > touchStartYRef.current) {
+      // Dragging downward moves content down (scrolling upward)
+      shouldAutoScrollRef.current = false;
+    }
+    touchStartYRef.current = currentY;
+  };
+
+  const handleTouchEnd = () => {
+    isUserTouchingRef.current = false;
+    const container = messagesContainerRef.current;
+    if (container) {
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      if (distanceFromBottom < 40) {
+        shouldAutoScrollRef.current = true;
+      }
+    }
+  };
+
+  // Scroll listener on messages container
+  const handleMessagesScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+
+    if (distanceFromBottom > 80) {
+      shouldAutoScrollRef.current = false;
+    } else if (distanceFromBottom < 40) {
+      shouldAutoScrollRef.current = true;
+    }
   };
 
   const getReply = async () => {
     if (!prompt.trim() || isLoading) return;
 
     const currentPrompt = prompt;
+    const originatingThreadId = threadId;
     shouldAutoScrollRef.current = true;
-    setPrompt(""); // Clear input right away
+    isThreadSwitchPendingRef.current = false;
+    setChatError(null);
+    setPrompt("");
     setIsLoading(true);
-    setNewChat(false); // Reset new chat state if needed
+    setNewChat(false);
 
     // 1. Append User Message immediately to state
     setPrevChats((prev) => [...prev, { role: "user", content: currentPrompt }]);
+
+    // Move to new user message
+    requestAnimationFrame(() => {
+      const container = messagesContainerRef.current;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    });
 
     const options = {
       method: "POST",
@@ -163,21 +183,27 @@ function ChatWindow({ onOpenSidebar = () => {} }) {
       },
       body: JSON.stringify({
         message: currentPrompt,
-        threadId: threadId,
+        threadId: originatingThreadId,
       }),
     };
 
     try {
-      const response = await fetch("https://relay-ai-v9uy.onrender.com/chat", options);
+      const response = await fetch(`${API_BASE_URL}/chat`, options);
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to fetch reply");
       }
 
-      // console.log(data);
-      setReply(data.reply);
+      // Only update visible chat and typewriter if user is still viewing the originating thread
+      if (activeThreadIdRef.current === originatingThreadId) {
+        setReply(data.reply);
+        if (data && data.reply) {
+          setPrevChats((prev) => [...prev, { role: "assistant", content: data.reply }]);
+        }
+      }
 
+      // Always update sidebar metadata so thread list stays current
       if (data.thread) {
         const updatedThread = {
           id: data.thread._id,
@@ -214,15 +240,15 @@ function ChatWindow({ onOpenSidebar = () => {} }) {
           });
         });
       }
-
-      // 2. Append Assistant Response when received
-      if (data && data.reply) {
-        setPrevChats((prev) => [...prev, { role: "assistant", content: data.reply }]);
-      }
     } catch (error) {
-      console.error("Error fetching reply:", error);
+      if (activeThreadIdRef.current === originatingThreadId) {
+        console.error("Error fetching reply:", error);
+        setChatError(error.message || "Failed to send message. Please try again.");
+      }
     } finally {
-      setIsLoading(false);
+      if (activeThreadIdRef.current === originatingThreadId) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -251,8 +277,10 @@ function ChatWindow({ onOpenSidebar = () => {} }) {
         className="messages-container"
         ref={messagesContainerRef}
         onScroll={handleMessagesScroll}
-        onWheel={handleUserScrollIntent}
-        onTouchMove={handleUserScrollIntent}
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       > 
         {showWelcome && (
           <div className="new-chat-welcome">
@@ -279,7 +307,6 @@ function ChatWindow({ onOpenSidebar = () => {} }) {
               rootMargin="0px"
               textAlign="center"
             />
-            
           </div>
         )}
 
@@ -294,7 +321,12 @@ function ChatWindow({ onOpenSidebar = () => {} }) {
               />
             </div>
           </div>
-          
+        )}
+        {chatError && (
+          <div className="chat-error" role="alert">
+            <i className="fa-solid fa-circle-exclamation"></i>
+            <span>{chatError}</span>
+          </div>
         )}
         <div
           ref={chatEndRef}
@@ -302,12 +334,6 @@ function ChatWindow({ onOpenSidebar = () => {} }) {
           aria-hidden="true"
         />
       </div>
-
-      {/* {isLoading && (
-        <div className="loader">
-          <SyncLoader color="#b6f45c" size={7} speedMultiplier={0.8} />
-        </div>
-      )} */}
 
       <div className="chatInput">
         <div className="userinput">

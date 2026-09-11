@@ -3,7 +3,7 @@ import "./App.css";
 import Sidebar from "./Sidebar";
 import ChatWindow from "./Chatwindow";
 import AuthModal from "./AuthModal";
-import MyContext from "./Mycontext";
+import MyContext, { API_BASE_URL } from "./Mycontext";
 import { v4 as uuidv4 } from "uuid";
 
 function App() {
@@ -46,7 +46,7 @@ function App() {
     try {
       setAuthLoading(true);
 
-      const response = await fetch("https://relay-ai-v9uy.onrender.com/auth/me", {
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
         method: "GET",
         credentials: "include"
       });
