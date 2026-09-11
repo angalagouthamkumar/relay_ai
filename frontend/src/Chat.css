@@ -23,8 +23,50 @@
 .userMessage,
 .gptMessage {
     margin: 0;
-    white-space: pre-wrap;
     overflow-wrap: anywhere;
+}
+
+.userMessage,
+p.gptMessage {
+    white-space: pre-wrap;
+}
+
+div.gptMessage {
+    white-space: normal;
+}
+
+div.gptMessage p {
+    margin: 0 0 12px;
+}
+
+div.gptMessage h1,
+div.gptMessage h2,
+div.gptMessage h3,
+div.gptMessage h4 {
+    margin: 22px 0 10px;
+    line-height: 1.3;
+}
+
+div.gptMessage ul,
+div.gptMessage ol {
+    margin: 10px 0 14px;
+    padding-left: 24px;
+}
+
+div.gptMessage li {
+    margin: 5px 0;
+}
+
+div.gptMessage li p {
+    margin: 0;
+}
+
+div.gptMessage > :first-child {
+    margin-top: 0;
+}
+
+div.gptMessage > :last-child {
+    margin-bottom: 0;
 }
 
 .userMessage {
@@ -71,15 +113,23 @@
     }
 
     .userMessage {
-        max-width: 86%;
+        max-width: 88%;
         padding: 10px 13px;
         font-size: 13px;
     }
 
     .gptMessage {
+        max-width: 100%;
         padding-left: 13px;
         font-size: 14px;
         line-height: 1.7;
+    }
+
+    .gptMessage pre {
+        max-width: calc(100vw - 54px);
+        padding: 12px;
+        overflow-x: auto;
+        font-size: 11px;
     }
 }
 

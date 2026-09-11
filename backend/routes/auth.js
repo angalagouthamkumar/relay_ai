@@ -1,6 +1,10 @@
 import express from "express";
 import passport from "passport";
 import User from "../models/user.js";
+import transferGuestChats from "../utils/transferGuestChats.js";
+import {
+  USER_SESSION_DURATION
+} from "../middleware/chatIdentity.js";
 
 const router = express.Router();
 
@@ -10,8 +14,50 @@ const formatUser = (user) => ({
   email: user.email,
   role: user.role
 });
+const completeAuthentication = async (
+  req,
+  res,
+  user,
+  guestId,
+  statusCode,
+  message
+) => {
+  try {
+    const transferredChats = await transferGuestChats(
+      guestId,
+      user._id
+    );
+
+    delete req.session.guestId;
+    req.session.cookie.maxAge = USER_SESSION_DURATION;
+
+    await new Promise((resolve, reject) => {
+      req.session.save((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+
+    return res.status(statusCode).json({
+      message,
+      user: formatUser(user),
+      transferredChats
+    });
+  } catch (error) {
+    console.error("Authentication completion error:", error);
+
+    return res.status(500).json({
+      error: "Authenticated, but conversations could not be transferred"
+    });
+  }
+};
 
 router.post("/signup", async (req, res) => {
+
   try {
     const { username, email, password } = req.body;
 
@@ -56,20 +102,26 @@ router.post("/signup", async (req, res) => {
       password
     });
 
+    const guestId = req.session?.guestId || null;
+
     req.logIn(user, (loginError) => {
-      if (loginError) {
-        console.error("Signup session error:", loginError);
+    if (loginError) {
+      console.error("Signup session error:", loginError);
 
-        return res.status(500).json({
-          error: "Account created, but login session could not be started"
-        });
-      }
-
-      return res.status(201).json({
-        message: "Account created successfully",
-        user: formatUser(user)
+      return res.status(500).json({
+        error: "Account created, but login session could not be started"
       });
-    });
+    }
+
+    return completeAuthentication(
+      req,
+      res,
+      user,
+      guestId,
+      201,
+      "Account created successfully"
+    );
+  });
   } catch (error) {
     console.error("Signup error:", error);
 
@@ -96,36 +148,48 @@ router.post("/signup", async (req, res) => {
 });
 
 router.post("/login", (req, res, next) => {
-  passport.authenticate("local", (authenticationError, user, info) => {
-    if (authenticationError) {
-      console.error("Login authentication error:", authenticationError);
+  const guestId = req.session?.guestId || null;
 
-      return res.status(500).json({
-        error: "Unable to log in"
-      });
-    }
-
-    if (!user) {
-      return res.status(401).json({
-        error: info?.message || "Invalid email or password"
-      });
-    }
-
-    req.logIn(user, (loginError) => {
-      if (loginError) {
-        console.error("Login session error:", loginError);
+  passport.authenticate(
+    "local",
+    (authenticationError, user, info) => {
+      if (authenticationError) {
+        console.error(
+          "Login authentication error:",
+          authenticationError
+        );
 
         return res.status(500).json({
-          error: "Unable to start login session"
+          error: "Unable to log in"
         });
       }
 
-      return res.status(200).json({
-        message: "Logged in successfully",
-        user: formatUser(user)
+      if (!user) {
+        return res.status(401).json({
+          error: info?.message || "Invalid email or password"
+        });
+      }
+
+      req.logIn(user, (loginError) => {
+        if (loginError) {
+          console.error("Login session error:", loginError);
+
+          return res.status(500).json({
+            error: "Unable to start login session"
+          });
+        }
+
+        return completeAuthentication(
+          req,
+          res,
+          user,
+          guestId,
+          200,
+          "Logged in successfully"
+        );
       });
-    });
-  })(req, res, next);
+    }
+  )(req, res, next);
 });
 
 router.get("/me", (req, res) => {

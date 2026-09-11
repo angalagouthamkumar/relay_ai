@@ -17,6 +17,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const providerValue = {
     prompt,
@@ -73,12 +74,50 @@ function App() {
     checkAuth();
   }, [checkAuth]);
 
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    const handleResize = () => {
+      if (window.innerWidth > 700) {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
   return (
     <MyContext.Provider value={providerValue}>
       <div className="App">
-        <Sidebar />
+        <Sidebar
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
+
+        <button
+          type="button"
+          className={`sidebar-backdrop ${
+            isSidebarOpen ? "visible" : ""
+          }`}
+          aria-label="Close conversation menu"
+          tabIndex={isSidebarOpen ? 0 : -1}
+          onClick={() => setIsSidebarOpen(false)}
+        />
+
         <div className="main">
-          <ChatWindow />
+          <ChatWindow
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+          />
         </div>
       </div>
       <AuthModal />

@@ -1,10 +1,15 @@
 import "./Sidebar.css";
-import { useContext, useEffect, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useState
+} from "react";
 import MyContext from "./Mycontext";
 import { v4 as uuidv4 } from "uuid";
 
 
-function Sidebar() {
+function Sidebar({ isOpen = false, onClose = () => {} }) {
     const {
     allThreads,
     setAllThreads,
@@ -12,6 +17,7 @@ function Sidebar() {
     setPrompt,
     setReply,
     setThreadId,
+    threadId,
     setPrevChats,
     currentUser,
     authLoading,
@@ -22,28 +28,47 @@ function Sidebar() {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
-  const getAllThreads = async () => {
-    try{
-      const response = await fetch("http://localhost:3000/chat/threads");
+  const getAllThreads = useCallback(async () => {
+    try {
+      const response = await fetch(
+        "http://localhost:3000/chat/threads",
+        {
+          method: "GET",
+          credentials: "include"
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Unable to fetch conversations");
+      }
+
       const data = await response.json();
-      const filteredThreads = data.map(thread => ({
+
+      if (!Array.isArray(data)) {
+        throw new Error("Invalid conversations response");
+      }
+
+      const filteredThreads = data.map((thread) => ({
         id: thread._id,
         threadId: thread.threadId,
         title: thread.title,
         createdAt: thread.createdAt,
+        updatedAt: thread.updatedAt,
         pinned: thread.pinned || false
       }));
-      console.log("Fetched threads:", filteredThreads);
+
       setAllThreads(filteredThreads);
-    }
-    catch(error){
+    } catch (error) {
       console.error("Error fetching threads:", error);
+      setAllThreads([]);
     }
-  };
+  }, [setAllThreads]);
 
   useEffect(() => {
+    if (authLoading) return;
+
     getAllThreads();
-  }, []);
+  }, [authLoading, currentUser, getAllThreads]);
 
   useEffect(() => {
   const closeMenu = () => {
@@ -64,12 +89,14 @@ function Sidebar() {
     setReply(null);
     setThreadId(uuidv4());
     setPrevChats([]);
+    onClose();
   };
 
   const openAuthModal = () => {
     setAuthMode("login");
     setIsAuthModalOpen(true);
     setIsProfileMenuOpen(false);
+    onClose();
   };
 
   const logoutUser = async () => {
@@ -93,6 +120,7 @@ function Sidebar() {
       setThreadId(uuidv4());
       setPrevChats([]);
       setIsProfileMenuOpen(false);
+      onClose();
     } catch (error) {
       console.error("Logout error:", error);
     }
@@ -102,13 +130,24 @@ function Sidebar() {
     setThreadId(threadId);
     try {
       const response = await fetch(`http://localhost:3000/chat/threads/${id}`, { 
-        method: "GET"
+        method: "GET",
+        credentials: "include"
       });
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to open conversation");
+      }
+
+      if (!Array.isArray(data)) {
+        throw new Error("Invalid conversation response");
+      }
+
       setPrevChats(data);
       setNewChat(false);
       setPrompt("");
       setReply(null);
+      onClose();
     }
     catch(error){
       console.error("Error changing thread:", error);
@@ -119,7 +158,8 @@ function Sidebar() {
       const response = await fetch(
         `http://localhost:3000/chat/threads/${id}/pin`,
         {
-          method: "PATCH"
+          method: "PATCH",
+          credentials: "include"
         }
       );
 
@@ -151,7 +191,8 @@ function Sidebar() {
   const deleteThread = async (id) => {
     try {
       const response = await fetch(`http://localhost:3000/chat/threads/${id}`, {
-        method: "DELETE"
+        method: "DELETE",
+        credentials: "include"
       });
 
       if (response.ok) {
@@ -168,17 +209,24 @@ function Sidebar() {
   };
 
   return (
-    <section className="sidebar">
+    <section
+      className={`sidebar ${isOpen ? "open" : ""}`}
+      aria-label="Conversation sidebar"
+    >
       {/* new chat btn */}
       <button className="new-chat-btn" onClick={createNewChat}>
-        <img src="src/assets/blacklogo.png" alt="gpt logo" className="logo"></img>
+        <span className="sidebar-brand-logo" aria-hidden="true">
+            <i className="fa-solid fa-bolt"></i>
+          </span>
          <span><i className="fa-solid fa-pen-to-square"></i></span>
       </button>
 
       <ul className="history">
         {allThreads.map((thread) => (
           <li
-            className="thread-item"
+            className={`thread-item ${
+              thread.threadId === threadId ? "active" : ""
+            }`}
             key={thread.id}
             onClick={() => changeThread(thread.id, thread.threadId)}
           >
@@ -259,11 +307,11 @@ function Sidebar() {
                 : currentUser?.username || "Log in / Sign up"}
             </span>
 
-            <span className="profile-status">
+            {/* <span className="profile-status">
               {currentUser
                 ? "Your conversations are saved"
                 : "Save and sync your chats"}
-            </span>
+            </span> */}
           </span>
 
           {currentUser && (

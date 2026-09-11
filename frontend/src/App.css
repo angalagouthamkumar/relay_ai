@@ -47,13 +47,45 @@ input {
     overflow: hidden;
 }
 
+.sidebar-backdrop {
+    display: none;
+}
+
 @media (max-width: 700px) {
     .App {
-        flex-direction: column;
+        position: relative;
     }
 
     .main {
         width: 100%;
-        height: calc(100dvh - 72px);
+        height: 100dvh;
+    }
+
+    .sidebar-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        display: block;
+        padding: 0;
+        visibility: hidden;
+        background-color: rgba(0, 0, 0, 0.58);
+        border: none;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+            opacity 220ms ease,
+            visibility 220ms ease;
+    }
+
+    .sidebar-backdrop.visible {
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar-backdrop {
+        transition: none;
     }
 }
