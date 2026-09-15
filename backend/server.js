@@ -9,7 +9,7 @@ import authRoutes from "./routes/auth.js";
 
 const app = express();
 
-// Production-safe proxy trust for Render / reverse proxies (single hop)
+
 app.set("trust proxy", 1);
 
 app.use(
