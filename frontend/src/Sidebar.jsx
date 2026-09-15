@@ -351,7 +351,7 @@ function Sidebar({ isOpen = false, onClose = () => {} }) {
           <p>
             Developed by{" "}
             <a
-              href="https://github.com/angalagouthamkumar"
+              href="https://github.com/angalagouthamkumar/relay-ai"
               target="_blank"
               rel="noreferrer"
             >
